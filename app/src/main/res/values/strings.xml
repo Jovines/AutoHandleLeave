@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">AutoHandleLeave</string>
+    <string name="epidemic">疫情</string>
+    <string name="ask_for_leave">请假</string>
+    <string name="information_settings">信息设置</string>
+    <string name="save">保存</string>
+    <string name="we_mail_account">we重邮账号</string>
+    <string name="password">密码</string>
+    <string name="keyword">关键字</string>
+    <string name="agree">同意</string>
+    <string name="refuse">拒绝</string>
+    <string name="leave_empty_tip">暂时无人请假</string>
+    <string name="account_information">账号信息</string>
+    <string name="real_name_tips">姓名(输入错误功能无法使用)</string>
+</resources>
