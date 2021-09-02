@@ -36,16 +36,31 @@ class LeaveActivity : AppCompatActivity() {
 
     private val realName: String by userSharedPreferencesDelegate(REAL_NAME)
 
+    lateinit var adapter: RecyclerView.Adapter<SelectDataBindingViewHolder>
+
+    var shadowList = mutableListOf<SchoolLeavingApproval.Result>()
+    var logIdList = mutableMapOf<String, Boolean>()
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         contentView = DataBindingUtil.setContentView(this, R.layout.activity_leave)
 
-        var shadowList = mutableListOf<SchoolLeavingApproval.Result>()
+        contentView.keyWord.visibility = View.GONE
 
-        var logIdList = mutableMapOf<String, Boolean>()
+        contentView.back.setOnClickListener { finish() }
 
-        val adapter = object : RecyclerView.Adapter<SelectDataBindingViewHolder>() {
+        contentView.checkbox.setOnCheckedChangeListener { buttonView, isChecked ->
+            synchronized(this) {
+                shadowList.forEach {
+                    logIdList[it.log_id.toString()] = isChecked
+                }
+            }
+            adapter.notifyDataSetChanged()
+        }
+
+        adapter = object : RecyclerView.Adapter<SelectDataBindingViewHolder>() {
             override fun onCreateViewHolder(
                 parent: ViewGroup,
                 viewType: Int
@@ -68,9 +83,17 @@ class LeaveActivity : AppCompatActivity() {
                     isOk.isChecked = if (!logId.isNullOrEmpty())
                         logIdList[logId] ?: false else false
 
-                    isOk.setOnClickListener {
+                    val recordSelect = {
                         if (!logId.isNullOrEmpty())
                             logIdList[logId] = isOk.isChecked
+                    }
+                    isOk.setOnClickListener {
+                        recordSelect()
+                    }
+
+                    root.setOnClickListener {
+                        isOk.isChecked = !isOk.isChecked
+                        recordSelect()
                     }
                 }
             }
@@ -98,7 +121,9 @@ class LeaveActivity : AppCompatActivity() {
                 val list = checkAskForLeave(username)
                 val filterList = list.filter { !shadowList.contains(it) }
                 if (!filterList.isNullOrEmpty()) {
-                    shadowList = list
+                    synchronized(this){
+                        shadowList = list
+                    }
                     logIdList = logIdList.filter { logId -> list.any { it.log_id == logId.key } }
                         .toMutableMap()
                     true
@@ -119,6 +144,11 @@ class LeaveActivity : AppCompatActivity() {
         logIdList: MutableMap<String, Boolean>,
         agreeOrNot: Boolean
     ) {
+        val filter = logIdList.filter { it.value }
+        if (filter.isEmpty()){
+            Toast.makeText(this,"请勾选你需要审批的",Toast.LENGTH_SHORT).show()
+            return
+        }
         val dialog = Dialog(this).apply {
             setContentView(R.layout.dialog_progress_loading)
             setCancelable(false)
@@ -127,34 +157,35 @@ class LeaveActivity : AppCompatActivity() {
             .bind<DialogProgressLoadingBinding>(dialog.findViewById(R.id.container))
             ?: return
         dialog.show()
-        var totalCount = 0
-        Observable.create<Boolean> { emitter ->
-            val filter = logIdList.filter { it.value }
-            totalCount = filter.size
+        val totalCount= filter.size
+        loadingBinding.description.text =
+            "审批中，请稍等...\n" +
+                    "0/$totalCount"
+        Observable.create<Pair<String,Boolean>> { emitter ->
             filter.forEach { (t, _) ->
                 emitter.onNext(
-                    approvalOfLeave(
+                    Pair(t,approvalOfLeave(
                         username,
                         t,
                         agreeOrNot,
                         realName
-                    )
+                    ))
                 )
             }
             emitter.onComplete()
         }.subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : Observer<Boolean> {
-                var successCount = 0
-                var fieldCount = 0
+            .subscribe(object : Observer<Pair<String,Boolean>> {
+                var successCount = mutableListOf<String>()
+                var fieldCount = mutableListOf<String>()
 
                 override fun onSubscribe(d: Disposable?) {}
 
-                override fun onNext(t: Boolean) {
-                    if (t) {
-                        successCount++
+                override fun onNext(t: Pair<String,Boolean>) {
+                    if (t.second) {
+                        successCount.add(t.first)
                     } else {
-                        fieldCount++
+                        fieldCount.add(t.first)
                     }
                     loadingBinding.description.text =
                         "审批中，请稍等...\n" +
@@ -167,7 +198,10 @@ class LeaveActivity : AppCompatActivity() {
 
                 override fun onComplete() {
                     dialog.dismiss()
-                    if (fieldCount == 0) {
+                    shadowList = shadowList.filter { !successCount.contains(it.log_id) }.toMutableList()
+                    successCount.forEach { logIdList.remove(it) }
+                    adapter.notifyDataSetChanged()
+                    if (fieldCount.isEmpty()) {
                         Toast.makeText(this@LeaveActivity, "全部审批成功", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(

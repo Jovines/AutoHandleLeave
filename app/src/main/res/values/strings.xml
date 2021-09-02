@@ -11,5 +11,5 @@
     <string name="refuse">拒绝</string>
     <string name="leave_empty_tip">暂时无人请假</string>
     <string name="account_information">账号信息</string>
-    <string name="real_name_tips">姓名(输入错误功能无法使用)</string>
+    <string name="real_name_tips">姓名(名字错误功能无法使用)</string>
 </resources>
